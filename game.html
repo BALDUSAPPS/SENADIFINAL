@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Baldus Bros - HD Arcade</title>
+    <title>Baldus Corp Infinite Runner</title>
     <style>
         body {
             margin: 0;
-            background-color: #0f172a;
+            background-color: #0b0f19;
             color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
@@ -27,9 +27,9 @@
             letter-spacing: 0.5px;
         }
         canvas {
-            background: linear-gradient(to bottom, #38bdf8 0%, #cbd5e1 65%, #1e293b 65%);
-            border: 2px solid #2563eb;
-            box-shadow: 0px 0px 20px rgba(37, 99, 235, 0.4);
+            background: linear-gradient(to bottom, #1e293b 0%, #334155 70%, #0f172a 70%);
+            border: 2px solid #3b82f6;
+            box-shadow: 0px 0px 20px rgba(59, 130, 246, 0.4);
             border-radius: 4px;
         }
         .controls-hint {
@@ -41,12 +41,12 @@
 </head>
 <body>
     <div class="hud">
-        <span>BALDUS BROS - WORLD 1-1</span>
+        <span>BALDUS CORP - INFINITE RUN</span>
         <span>PUNTOS: <span id="score">0</span></span>
         <span>VIDAS: <span id="lives">❤️❤️❤️</span></span>
     </div>
     <canvas id="gameCanvas" width="600" height="250"></canvas>
-    <div class="controls-hint">Usa las flechas <b>← →</b> para correr y <b>Espacio</b> / <b>↑</b> para saltar.</div>
+    <div class="controls-hint">Usa la <b>Barra Espaciadora</b> o <b>↑</b> para saltar los obstáculos. ¡Atrapa corazones para más vidas!</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
@@ -63,73 +63,54 @@
 
             if (type === 'jump') {
                 osc.type = 'square';
-                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.15);
                 gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'stomp') {
+            } else if (type === 'heart') {
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(250, audioCtx.currentTime);
-                osc.frequency.setValueAtTime(100, audioCtx.currentTime + 0.12);
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime + 0.15);
                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.12);
+                osc.stop(audioCtx.currentTime + 0.25);
             } else if (type === 'hurt') {
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
-                gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(180, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(60, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.3);
             }
         }
 
-        let cameraX = 0;
         let score = 0;
         let lives = 3;
+        let gameSpeed = 5;
         let frameCount = 0;
         let isGameOver = false;
-        let keys = {};
 
+        // Jugador estilo pixel art runner
         let player = {
-            x: 50, y: 155, width: 24, height: 30,
-            vx: 0, vy: 0, speed: 3.5, jumpForce: -10, gravity: 0.5, grounded: false, facing: 'right', invulnerable: 0, animFrame: 0
+            x: 60, y: 175, width: 26, height: 30,
+            vy: 0, gravity: 0.7, jumpForce: -11, grounded: false, invulnerable: 0, anim: 0
         };
 
-        let platforms = [
-            { x: 0, y: 195, width: 3000, height: 55 },
-            { x: 320, y: 130, width: 100, height: 16 },
-            { x: 500, y: 95, width: 130, height: 16 },
-            { x: 750, y: 130, width: 110, height: 16 },
-            { x: 1000, y: 115, width: 120, height: 16 },
-            { x: 1250, y: 130, width: 160, height: 16 }
-        ];
+        let obstacles = [];
+        let hearts = [];
+        let particles = [];
+        let clouds = [];
 
-        let scenery = [
-            { type: 'cloud', x: 120, y: 35, w: 70, h: 25 },
-            { type: 'cloud', x: 420, y: 20, w: 90, h: 30 },
-            { type: 'cloud', x: 850, y: 40, w: 80, h: 25 },
-            { type: 'cloud', x: 1250, y: 25, w: 95, h: 30 },
-            { type: 'hill', x: 80, y: 145, w: 100, h: 50 },
-            { type: 'hill', x: 600, y: 125, w: 130, h: 70 },
-            { type: 'bush', x: 260, y: 179, w: 50, h: 16 },
-            { type: 'bush', x: 700, y: 179, w: 60, h: 16 }
-        ];
-
-        let enemies = [
-            { type: 'goomba', x: 380, y: 175, width: 22, height: 20, vx: -1.4, alive: true, anim: 0 },
-            { type: 'koopa', x: 650, y: 171, width: 22, height: 24, vx: -1.1, alive: true, anim: 0 },
-            { type: 'flyer', x: 850, y: 80, width: 24, height: 20, vx: -2, baseY: 80, alive: true },
-            { type: 'goomba', x: 1100, y: 175, width: 22, height: 20, vx: -1.4, alive: true, anim: 0 },
-            { type: 'flyer', x: 1400, y: 65, width: 24, height: 20, vx: -2.3, baseY: 65, alive: true }
-        ];
+        // Inicializar algunas nubes de fondo
+        for (let i = 0; i < 5; i++) {
+            clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 80 + 10, speed: 1 + Math.random() * 1.5 });
+        }
 
         window.addEventListener("keydown", (e) => {
-            keys[e.code] = true;
             if ((e.code === "Space" || e.code === "ArrowUp") && player.grounded) {
                 player.vy = player.jumpForce;
                 player.grounded = false;
@@ -140,20 +121,26 @@
             }
         });
 
-        window.addEventListener("keyup", (e) => {
-            keys[e.code] = false;
+        canvas.addEventListener("click", () => {
+            if (player.grounded) {
+                player.vy = player.jumpForce;
+                player.grounded = false;
+                playSound('jump');
+            }
+            if (isGameOver) resetGame();
         });
 
         function resetGame() {
-            player.x = 50;
-            player.y = 155;
-            player.vx = 0;
-            player.vy = 0;
-            cameraX = 0;
+            obstacles = [];
+            hearts = [];
+            particles = [];
             score = 0;
             lives = 3;
+            gameSpeed = 5;
+            frameCount = 0;
             isGameOver = false;
-            enemies.forEach(e => e.alive = true);
+            player.y = 175;
+            player.vy = 0;
         }
 
         function loseLife() {
@@ -163,212 +150,165 @@
             player.invulnerable = 90;
             if (lives <= 0) {
                 isGameOver = true;
-            } else {
-                player.y = 100;
-                player.vy = 0;
             }
         }
 
         function update() {
             if (isGameOver) return;
 
-            if (player.invulnerable > 0) player.invulnerable--;
             frameCount++;
+            score = Math.floor(frameCount / 8);
+            gameSpeed = 5 + Math.floor(score / 250); // Aumenta dificultad progresivamente
 
-            if (keys["ArrowLeft"] || keys["KeyA"]) {
-                player.vx = -player.speed;
-                player.facing = 'left';
-                player.animFrame += 0.2;
-            } else if (keys["ArrowRight"] || keys["KeyD"]) {
-                player.vx = player.speed;
-                player.facing = 'right';
-                player.animFrame += 0.2;
-            } else {
-                player.vx = 0;
-                player.animFrame = 0;
-            }
+            if (player.invulnerable > 0) player.invulnerable--;
+            player.anim += 0.2;
 
-            player.x += player.vx;
-            if (player.x < 0) player.x = 0;
-
-            cameraX = player.x - 180;
-            if (cameraX < 0) cameraX = 0;
-
+            // Gravedad
             player.vy += player.gravity;
             player.y += player.vy;
-            player.grounded = false;
 
-            for (let p of platforms) {
-                if (
-                    player.x < p.x + p.width &&
-                    player.x + player.width > p.x &&
-                    player.y + player.height >= p.y &&
-                    player.y + player.height - player.vy <= p.y + 8 &&
-                    player.vy >= 0
-                ) {
-                    player.y = p.y - player.height;
-                    player.vy = 0;
-                    player.grounded = true;
+            if (player.y > 175) {
+                player.y = 175;
+                player.vy = 0;
+                player.grounded = true;
+            }
+
+            // Nubes en movimiento
+            clouds.forEach(c => {
+                c.x -= c.speed * 0.5;
+                if (c.x < -60) c.x = canvas.width + 50;
+            });
+
+            // Generación infinita y aleatoria de obstáculos (estilo cactus/bloques futuristas)
+            if (frameCount % Math.max(45, 110 - Math.floor(score / 20)) === 0) {
+                let type = Math.random();
+                if (type < 0.6) {
+                    // Obstáculo bajo normal
+                    obstacles.push({ x: canvas.width, y: 180, width: 22, height: 25, type: 'block' });
+                } else if (type < 0.85) {
+                    // Obstáculo alto
+                    obstacles.push({ x: canvas.width, y: 145, width: 24, height: 60, type: 'tall' });
+                } else {
+                    // Obstáculo doble
+                    obstacles.push({ x: canvas.width, y: 180, width: 20, height: 25, type: 'block' });
+                    obstacles.push({ x: canvas.width + 35, y: 180, width: 20, height: 25, type: 'block' });
                 }
             }
 
-            for (let en of enemies) {
-                if (!en.alive) continue;
+            // Generación aleatoria de corazones para recuperar vidas
+            if (frameCount % 300 === 0 && Math.random() > 0.3) {
+                hearts.push({ x: canvas.width, y: Math.random() > 0.5 ? 120 : 150, width: 20, height: 20 });
+            }
 
-                if (en.type === 'flyer') {
-                    en.x += en.vx;
-                    en.y = en.baseY + Math.sin(frameCount * 0.1) * 35;
-                    if (en.x < cameraX - 60) en.x = cameraX + 650;
-                } else {
-                    en.x += en.vx;
-                    en.anim += 0.15;
-                    if (en.x < 100 || en.x > 2500) en.vx *= -1;
-                }
+            // Actualizar obstáculos
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= gameSpeed;
 
+                // Colisión con jugador
                 if (
-                    player.x < en.x + en.width &&
-                    player.x + player.width > en.x &&
-                    player.y < en.y + en.height &&
-                    player.y + player.height > en.y
+                    player.x < obstacles[i].x + obstacles[i].width - 4 &&
+                    player.x + player.width - 4 > obstacles[i].x &&
+                    player.y < obstacles[i].y + obstacles[i].height &&
+                    player.y + player.height > obstacles[i].y
                 ) {
-                    if (player.vy > 0 && player.y + player.height - player.vy <= en.y + 12) {
-                        en.alive = false;
-                        player.vy = -8;
-                        score += 250;
-                        playSound('stomp');
-                    } else {
-                        loseLife();
-                    }
+                    loseLife();
+                    obstacles.splice(i, 1);
+                } else if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Actualizar corazones
+            for (let i = hearts.length - 1; i >= 0; i--) {
+                hearts[i].x -= gameSpeed;
+
+                // Colisión con jugador para sumar vida
+                if (
+                    player.x < hearts[i].x + hearts[i].width &&
+                    player.x + player.width > hearts[i].x &&
+                    player.y < hearts[i].y + hearts[i].height &&
+                    player.y + player.height > hearts[i].y
+                ) {
+                    if (lives < 5) lives++;
+                    playSound('heart');
+                    hearts.splice(i, 1);
+                } else if (hearts[i].x + hearts[i].width < 0) {
+                    hearts.splice(i, 1);
                 }
             }
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(-cameraX, 0);
 
-            // Nubes detalladas
-            for (let sc of scenery) {
-                if (sc.type === 'cloud') {
-                    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
-                    ctx.beginPath();
-                    ctx.arc(sc.x, sc.y, sc.h/2, 0, Math.PI * 2);
-                    ctx.arc(sc.x + sc.w*0.35, sc.y - 5, sc.h*0.65, 0, Math.PI * 2);
-                    ctx.arc(sc.x + sc.w*0.75, sc.y, sc.h/2, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+            // Nubes de fondo
+            ctx.fillStyle = "rgba(255, 255, 255, 0.25)";
+            clouds.forEach(c => {
+                ctx.beginPath();
+                ctx.arc(c.x, c.y, 12, 0, Math.PI * 2);
+                ctx.arc(c.x + 12, c.y - 4, 16, 0, Math.PI * 2);
+                ctx.arc(c.x + 24, c.y, 12, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // Letrero dinámico en el fondo que pasa cada cierto tiempo: "BALDUS CORP"
+            let marcaX = (1500 - (frameCount * 1.5) % 1800);
+            ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
+            ctx.font = "bold 42px 'Segoe UI', sans-serif";
+            ctx.fillText("BALDUS CORP", marcaX, 90);
+
+            // Suelo pixelado con líneas retro
+            ctx.fillStyle = "#1e293b";
+            ctx.fillRect(0, 205, canvas.width, 45);
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillRect(0, 205, canvas.width, 3);
+
+            // Dibujar Obstáculos (Diseño detallado tipo bloque cibernético / cactus pixel)
+            for (let obs of obstacles) {
+                ctx.fillStyle = "#ef4444";
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                ctx.fillStyle = "#b91c1c";
+                ctx.fillRect(obs.x + 2, obs.y + 2, obs.width - 4, 4);
             }
 
-            // Colinas y arbustos definidos
-            for (let sc of scenery) {
-                if (sc.type === 'hill') {
-                    ctx.fillStyle = "#15803d";
-                    ctx.beginPath();
-                    ctx.arc(sc.x + sc.w/2, sc.y + sc.h, sc.w/2, Math.PI, 0, false);
-                    ctx.fill();
-                    // Anillo de brillo decorativo en la colina
-                    ctx.strokeStyle = "#16a34a";
-                    ctx.lineWidth = 3;
-                    ctx.beginPath();
-                    ctx.arc(sc.x + sc.w/2, sc.y + sc.h, sc.w/2 - 2, Math.PI * 0.8, Math.PI * 0.2, true);
-                    ctx.stroke();
-                } else if (sc.type === 'bush') {
-                    ctx.fillStyle = "#166534";
-                    ctx.beginPath();
-                    ctx.arc(sc.x + 12, sc.y + 10, 11, 0, Math.PI * 2);
-                    ctx.arc(sc.x + 28, sc.y + 4, 15, 0, Math.PI * 2);
-                    ctx.arc(sc.x + 42, sc.y + 10, 11, 0, Math.PI * 2);
-                    ctx.fill();
-                }
+            // Dibujar Corazones (Vidas extra)
+            for (let h of hearts) {
+                ctx.fillStyle = "#ec4899";
+                ctx.beginPath();
+                let hx = h.x + 10, hy = h.y + 10;
+                ctx.arc(hx - 5, hy, 6, Math.PI, 0, false);
+                ctx.arc(hx + 5, hy, 6, Math.PI, 0, false);
+                ctx.lineTo(hx, hy + 12);
+                ctx.fill();
             }
 
-            // Suelo y plataformas estilizadas
-            for (let p of platforms) {
-                if (p.y > 150) {
-                    ctx.fillStyle = "#b91c1c"; // Bloques de ladrillo
-                    ctx.fillRect(p.x, p.y, p.width, p.height);
-                    ctx.fillStyle = "#15803d"; // Capa de césped superior viva
-                    ctx.fillRect(p.x, p.y, p.width, 10);
-                    ctx.fillStyle = "#22c55e";
-                    ctx.fillRect(p.x, p.y, p.width, 4);
-                } else {
-                    ctx.fillStyle = "#ea580c"; // Bloques flotantes misteriosos
-                    ctx.fillRect(p.x, p.y, p.width, p.height);
-                    ctx.strokeStyle = "#7c2d12";
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(p.x, p.y, p.width, p.height);
-                }
-            }
-
-            // Enemigos animados con expresiones y movimiento
-            for (let en of enemies) {
-                if (!en.alive) continue;
-
-                if (en.type === 'goomba') {
-                    ctx.fillStyle = "#9a3412";
-                    ctx.fillRect(en.x, en.y + 6, en.width, en.height - 6);
-                    // Ojos enojados
-                    ctx.fillStyle = "#fef08a";
-                    ctx.fillRect(en.x + 2, en.y + 7, 6, 6);
-                    ctx.fillRect(en.x + 14, en.y + 7, 6, 6);
-                    ctx.fillStyle = "#000000";
-                    ctx.fillRect(en.x + 5, en.y + 9, 2, 3);
-                    ctx.fillRect(en.x + 17, en.y + 9, 2, 3);
-                    // Patas animadas
-                    let legStep = Math.sin(en.anim) > 0 ? 3 : 0;
-                    ctx.fillStyle = "#451a03";
-                    ctx.fillRect(en.x + 2, en.y + 18, 5, 4 + legStep);
-                    ctx.fillRect(en.x + 15, en.y + 18, 5, 4 - legStep);
-                } else if (en.type === 'koopa') {
-                    ctx.fillStyle = "#15803d";
-                    ctx.fillRect(en.x + 2, en.y + 8, 18, 16);
-                    ctx.fillStyle = "#16a34a";
-                    ctx.fillRect(en.x, en.y + 10, 22, 12);
-                    ctx.fillStyle = "#fde047"; // Cabeza asomada
-                    ctx.fillRect(en.x + (en.vx > 0 ? 16 : -4), en.y + 10, 8, 8);
-                } else if (en.type === 'flyer') {
-                    ctx.fillStyle = "#dc2626";
-                    ctx.fillRect(en.x, en.y + 4, en.width, en.height - 4);
-                    // Alas batiéndose rápido
-                    ctx.fillStyle = "#ffffff";
-                    let wingFlap = Math.sin(frameCount * 0.6) * 8;
-                    ctx.fillRect(en.x - 10, en.y + wingFlap, 10, 6);
-                    ctx.fillRect(en.x + 24, en.y + wingFlap, 10, 6);
-                }
-            }
-
-            // Sprite del Jugador (Baldus Bros con animación fluida de piernas y gorra)
+            // Dibujar Jugador (Sprite animado pixel art)
             if (player.invulnerable % 4 < 2) {
                 let px = player.x;
                 let py = player.y;
 
-                // Gorra y camisa roja detallada
-                ctx.fillStyle = "#b91c1c";
-                ctx.fillRect(px + (player.facing === 'right' ? 4 : 2), py, 16, 9);
-                ctx.fillRect(px + 2, py + 9, 20, 10);
+                // Cuerpo / Traje
+                ctx.fillStyle = "#2563eb";
+                ctx.fillRect(px + 4, py + 10, 18, 14);
 
-                // Overol azul corporativo
+                // Cabeza y Gorra Baldus
+                ctx.fillStyle = "#38bdf8";
+                ctx.fillRect(px + 3, py + 2, 18, 9);
                 ctx.fillStyle = "#1d4ed8";
-                ctx.fillRect(px + 4, py + 15, 16, 11);
-                ctx.fillStyle = "#facc15"; // Botones dorados del overol
-                ctx.fillRect(px + 5, py + 16, 2, 2);
-                ctx.fillRect(px + 17, py + 16, 2, 2);
+                ctx.fillRect(px + (player.vy !== 0 ? 2 : 5), py, 14, 4);
 
-                // Piernas con animación al caminar
-                let legCycle = Math.sin(player.animFrame) * 3;
-                ctx.fillStyle = "#78350f";
-                ctx.fillRect(px + 2, py + 26, 7, 4 + legCycle);
-                ctx.fillRect(px + 15, py + 26, 7, 4 - legCycle);
+                // Piernas con animación de carrera
+                let legOffset = player.grounded ? Math.sin(player.anim) * 5 : 0;
+                ctx.fillStyle = "#1e293b";
+                ctx.fillRect(px + 5, py + 24, 6, 6 + legOffset);
+                ctx.fillRect(px + 15, py + 24, 6, 6 - legOffset);
             }
 
-            ctx.restore();
-
-            // Actualizar interfaz HUD
+            // Actualizar HUD
             document.getElementById("score").innerText = score;
-            let hearts = "";
-            for (let h = 0; h < lives; h++) hearts += "❤️";
-            document.getElementById("lives").innerHTML = hearts;
+            let heartsStr = "";
+            for (let i = 0; i < lives; i++) heartsStr += "❤️";
+            document.getElementById("lives").innerHTML = heartsStr;
 
             if (isGameOver) {
                 ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
