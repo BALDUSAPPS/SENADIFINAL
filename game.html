@@ -2,135 +2,285 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Minijuego Arcade</title>
+    <title>Baldus Bros Arcade</title>
     <style>
         body {
             margin: 0;
-            background-color: #0f172a;
-            color: white;
-            font-family: Arial, sans-serif;
+            background-color: #0b0f19;
+            color: #ffffff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 400px;
+            height: 420px;
             overflow: hidden;
         }
-        canvas {
-            background: #1e293b;
-            border: 2px solid #3b82f6;
-            box-shadow: 0px 0px 15px rgba(59, 130, 246, 0.5);
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            width: 600px;
+            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            color: #38bdf8;
+            letter-spacing: 0.5px;
         }
-        .info {
-            margin-bottom: 8px;
-            font-size: 14px;
-            letter-spacing: 1px;
+        canvas {
+            background: linear-gradient(to bottom, #38bdf8 0%, #bae6fd 60%, #1e293b 60%);
+            border: 2px solid #2563eb;
+            box-shadow: 0px 0px 20px rgba(37, 99, 235, 0.4);
+            border-radius: 4px;
+        }
+        .controls-hint {
+            margin-top: 6px;
+            font-size: 11px;
+            color: #94a3b8;
         }
     </style>
 </head>
 <body>
-    <div class="info">Usa la <b>Barra Espaciadora</b> o <b>Click</b> para saltar los obstáculos. Puntuación: <span id="score">0</span></div>
+    <div class="hud">
+        <span>BALDUS BROS - MUNDO 1-1</span>
+        <span>PUNTOS: <span id="score">0</span></span>
+        <span>VIDAS: ❤️❤️❤️</span>
+    </div>
     <canvas id="gameCanvas" width="600" height="250"></canvas>
+    <div class="controls-hint">Usa las flechas <b>← →</b> para moverte y <b>Espacio</b> / <b>↑</b> para saltar.</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        let dino = { x: 50, y: 180, width: 25, height: 25, vy: 0, gravity: 0.6, jump: -10, grounded: false };
+        // Sistema de Sonido retro (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'jump') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.15);
+            } else if (type === 'score') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.08);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'gameover') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        // Estado del jugador (Protagonista tipo Mario)
+        let player = {
+            x: 50, y: 170, width: 22, height: 28,
+            vx: 0, vy: 0, speed: 3.5, jumpForce: -9, gravity: 0.5, grounded: false, facing: 'right'
+        };
+
+        // Entorno y obstáculos (Goombas / Tuberías simuladas)
         let obstacles = [];
+        let platforms = [
+            { x: 0, y: 198, width: 600, height: 52 }, // Suelo principal
+            { x: 220, y: 130, width: 90, height: 16 }, // Plataforma flotante 1
+            { x: 380, y: 95, width: 80, height: 16 }   // Plataforma flotante 2
+        ];
+        
         let score = 0;
-        let gameSpeed = 4;
         let frameCount = 0;
         let isGameOver = false;
+        let keys = {};
 
-        document.addEventListener("keydown", function(e) {
-            if (e.code === "Space" || e.code === "ArrowUp") {
-                if (dino.grounded) {
-                    dino.vy = dino.jump;
-                    dino.grounded = false;
-                }
-                if (isGameOver) resetGame();
+        window.addEventListener("keydown", (e) => {
+            keys[e.code] = true;
+            if ((e.code === "Space" || e.code === "ArrowUp") && player.grounded) {
+                player.vy = player.jumpForce;
+                player.grounded = false;
+                playSound('jump');
+            }
+            if (isGameOver && (e.code === "Space" || e.code === "Enter")) {
+                resetGame();
             }
         });
 
-        canvas.addEventListener("click", function() {
-            if (dino.grounded) {
-                dino.vy = dino.jump;
-                dino.grounded = false;
-            }
-            if (isGameOver) resetGame();
+        window.addEventListener("keyup", (e) => {
+            keys[e.code] = false;
         });
 
         function resetGame() {
+            player.x = 50;
+            player.y = 170;
+            player.vx = 0;
+            player.vy = 0;
             obstacles = [];
             score = 0;
-            gameSpeed = 4;
+            frameCount = 0;
             isGameOver = false;
-            dino.y = 180;
         }
 
         function update() {
             if (isGameOver) return;
 
             frameCount++;
-            score = Math.floor(frameCount / 10);
-            document.getElementById("score").innerText = score;
-
-            // Gravedad
-            dino.vy += dino.gravity;
-            dino.y += dino.vy;
-
-            if (dino.y > 180) {
-                dino.y = 180;
-                dino.vy = 0;
-                dino.grounded = true;
+            if (frameCount % 15 === 0) {
+                score += 5; // Aumento de puntos por tiempo sobrevivido
             }
 
-            // Obstáculos
-            if (frameCount % 100 === 0) {
-                obstacles.push({ x: canvas.width, y: 185, width: 20, height: 20 });
+            // Movimiento horizontal estilo Mario
+            if (keys["ArrowLeft"] || keys["KeyA"]) {
+                player.vx = -player.speed;
+                player.facing = 'left';
+            } else if (keys["ArrowRight"] || keys["KeyD"]) {
+                player.vx = player.speed;
+                player.facing = 'right';
+            } else {
+                player.vx = 0;
+            }
+
+            player.x += player.vx;
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+            // Gravedad y saltos
+            player.vy += player.gravity;
+            player.y += player.vy;
+            player.grounded = false;
+
+            // Colisiones con plataformas y suelo
+            for (let p of platforms) {
+                if (
+                    player.x < p.x + p.width &&
+                    player.x + player.width > p.x &&
+                    player.y + player.height >= p.y &&
+                    player.y + player.height - player.vy <= p.y + 6 &&
+                    player.vy >= 0
+                ) {
+                    player.y = p.y - player.height;
+                    player.vy = 0;
+                    player.grounded = true;
+                }
+            }
+
+            // Generación de enemigos / obstáculos móviles (Estilo Goomba)
+            if (frameCount % 120 === 0) {
+                obstacles.push({
+                    x: canvas.width,
+                    y: 178,
+                    width: 20,
+                    height: 20,
+                    vx: -2.5
+                });
             }
 
             for (let i = obstacles.length - 1; i >= 0; i--) {
-                obstacles[i].x -= gameSpeed;
+                let obs = obstacles[i];
+                obs.x += obs.vx;
 
-                // Colisiones
+                // Colisión con el jugador
                 if (
-                    dino.x < obstacles[i].x + obstacles[i].width &&
-                    dino.x + dino.width > obstacles[i].x &&
-                    dino.y < obstacles[i].y + obstacles[i].height &&
-                    dino.y + dino.height > obstacles[i].y
+                    player.x < obs.x + obs.width &&
+                    player.x + player.width > obs.x &&
+                    player.y < obs.y + obs.height &&
+                    player.y + player.height > obs.y
                 ) {
-                    isGameOver = true;
-                }
-
-                if (obstacles[i].x + obstacles[i].width < 0) {
+                    // Si cae encima del obstáculo, lo elimina (Salto ofensivo)
+                    if (player.vy > 0 && player.y + player.height - player.vy <= obs.y + 8) {
+                        obstacles.splice(i, 1);
+                        player.vy = -6;
+                        score += 100;
+                        playSound('score');
+                    } else {
+                        isGameOver = true;
+                        playSound('gameover');
+                    }
+                } else if (obs.x + obs.width < 0) {
                     obstacles.splice(i, 1);
                 }
             }
         }
 
         function draw() {
+            // Fondo de cielo y colinas decorativas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Nubes de fondo
+            ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
+            ctx.beginPath();
+            ctx.arc(120, 50, 18, 0, Math.PI * 2);
+            ctx.arc(140, 42, 22, 0, Math.PI * 2);
+            ctx.arc(450, 70, 25, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Suelo
-            ctx.fillStyle = "#334155";
-            ctx.fillRect(0, 205, canvas.width, 45);
-
-            // Jugador (Cubo de Baldus Corp)
-            ctx.fillStyle = "#3b82f6";
-            ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
-
-            // Obstáculos
-            ctx.fillStyle = "#ef4444";
-            for (let obs of obstacles) {
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            // Dibujar plataformas y suelo
+            for (let p of platforms) {
+                if (p.y > 150) {
+                    // Suelo con diseño de bloques de ladrillo
+                    ctx.fillStyle = "#b45309";
+                    ctx.fillRect(p.x, p.y, p.width, p.height);
+                    ctx.fillStyle = "#15803d";
+                    ctx.fillRect(p.x, p.y, p.width, 10);
+                } else {
+                    // Plataformas flotantes clásicas
+                    ctx.fillStyle = "#f97316";
+                    ctx.fillRect(p.x, p.y, p.width, p.height);
+                    ctx.strokeStyle = "#c2410c";
+                    ctx.strokeRect(p.x, p.y, p.width, p.height);
+                }
             }
 
+            // Dibujar Enemigos (Estilo Goomba rojizo)
+            for (let obs of obstacles) {
+                ctx.fillStyle = "#dc2626";
+                ctx.fillRect(obs.x, obs.y + 4, obs.width, obs.height - 4);
+                // Ojos del enemigo
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(obs.x + 3, obs.y + 7, 4, 4);
+                ctx.fillRect(obs.x + 13, obs.y + 7, 4, 4);
+            }
+
+            // Dibujar Personaje (Estilo Sprite Pixelado de Baldus Bros)
+            let px = player.x;
+            let py = player.y;
+            
+            // Gorra y camisa roja
+            ctx.fillStyle = "#ef4444";
+            ctx.fillRect(px + (player.facing === 'right' ? 4 : 2), py, 14, 10); // Gorra
+            ctx.fillRect(px + 2, py + 10, 18, 10); // Cuerpo
+
+            // Overol azul
+            ctx.fillStyle = "#1d4ed8";
+            ctx.fillRect(px + 4, py + 16, 14, 12);
+
+            // Zapatos
+            ctx.fillStyle = "#78350f";
+            ctx.fillRect(px, py + 24, 8, 4);
+            ctx.fillRect(px + 14, py + 24, 8, 4);
+
+            // Actualizar HUD de Puntos en pantalla
+            document.getElementById("score").innerText = score;
+
             if (isGameOver) {
-                ctx.fillStyle = "white";
-                ctx.font = "20px Arial";
-                ctx.fillText("¡JUEGO TERMINADO! Haz click para reiniciar", 80, 120);
+                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 18px Segoe UI";
+                ctx.fillText("¡GAME OVER! Presiona ESPACIO para reiniciar", 85, 120);
             }
         }
 
