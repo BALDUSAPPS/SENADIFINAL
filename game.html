@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Baldus Corp Infinite Runner</title>
+    <title>Baldus Corp Craft Runner</title>
     <style>
         body {
             margin: 0;
@@ -41,18 +41,17 @@
 </head>
 <body>
     <div class="hud">
-        <span>BALDUS CORP - INFINITE RUN</span>
+        <span>BALDUS CORP - CRAFT RUN</span>
         <span>PUNTOS: <span id="score">0</span></span>
         <span>VIDAS: <span id="lives">❤️❤️❤️</span></span>
     </div>
     <canvas id="gameCanvas" width="600" height="250"></canvas>
-    <div class="controls-hint">Usa la <b>Barra Espaciadora</b> o <b>↑</b> para saltar los obstáculos. ¡Atrapa corazones para más vidas!</div>
+    <div class="controls-hint">Usa <b>Espacio</b> o <b>↑</b> para saltar. ¡Atrapa corazones y alas para volar!</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Sistema de audio retro
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(type) {
             if (audioCtx.state === 'suspended') { audioCtx.resume(); }
@@ -63,20 +62,20 @@
 
             if (type === 'jump') {
                 osc.type = 'square';
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.15);
+                osc.frequency.setValueAtTime(140, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
                 gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'heart') {
+            } else if (type === 'powerup') {
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-                osc.frequency.setValueAtTime(800, audioCtx.currentTime + 0.15);
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(700, audioCtx.currentTime + 0.2);
                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.25);
+                osc.stop(audioCtx.currentTime + 0.3);
             } else if (type === 'hurt') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(180, audioCtx.currentTime);
@@ -88,123 +87,128 @@
             }
         }
 
+        let gameState = "MENU"; // MENU, PLAYING, GAMEOVER
         let score = 0;
         let lives = 3;
         let gameSpeed = 5;
         let frameCount = 0;
-        let isGameOver = false;
 
-        // Jugador estilo pixel art runner
         let player = {
-            x: 60, y: 175, width: 26, height: 30,
-            vy: 0, gravity: 0.7, jumpForce: -11, grounded: false, invulnerable: 0, anim: 0
+            x: 60, y: 170, width: 24, height: 32,
+            vy: 0, gravity: 0.65, jumpForce: -10.5, grounded: false, invulnerable: 0, anim: 0, wingsTime: 0
         };
 
         let obstacles = [];
-        let hearts = [];
-        let particles = [];
+        let items = [];
         let clouds = [];
 
-        // Inicializar algunas nubes de fondo
         for (let i = 0; i < 5; i++) {
             clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 80 + 10, speed: 1 + Math.random() * 1.5 });
         }
 
         window.addEventListener("keydown", (e) => {
-            if ((e.code === "Space" || e.code === "ArrowUp") && player.grounded) {
-                player.vy = player.jumpForce;
-                player.grounded = false;
-                playSound('jump');
-            }
-            if (isGameOver && (e.code === "Space" || e.code === "Enter")) {
-                resetGame();
+            if (e.code === "Space" || e.code === "ArrowUp") {
+                if (gameState === "MENU") {
+                    startGame();
+                } else if (gameState === "PLAYING" && (player.grounded || player.wingsTime > 0)) {
+                    player.vy = player.wingsTime > 0 ? -6 : player.jumpForce;
+                    player.grounded = false;
+                    playSound('jump');
+                } else if (gameState === "GAMEOVER") {
+                    startGame();
+                }
             }
         });
 
         canvas.addEventListener("click", () => {
-            if (player.grounded) {
-                player.vy = player.jumpForce;
+            if (gameState === "MENU") {
+                startGame();
+            } else if (gameState === "PLAYING" && (player.grounded || player.wingsTime > 0)) {
+                player.vy = player.wingsTime > 0 ? -6 : player.jumpForce;
                 player.grounded = false;
                 playSound('jump');
+            } else if (gameState === "GAMEOVER") {
+                startGame();
             }
-            if (isGameOver) resetGame();
         });
 
-        function resetGame() {
+        function startGame() {
+            gameState = "PLAYING";
             obstacles = [];
-            hearts = [];
-            particles = [];
+            items = [];
             score = 0;
             lives = 3;
             gameSpeed = 5;
             frameCount = 0;
-            isGameOver = false;
-            player.y = 175;
+            player.y = 170;
             player.vy = 0;
+            player.wingsTime = 0;
         }
 
         function loseLife() {
-            if (player.invulnerable > 0) return;
+            if (player.invulnerable > 0 || player.wingsTime > 0) return;
             lives--;
             playSound('hurt');
             player.invulnerable = 90;
             if (lives <= 0) {
-                isGameOver = true;
+                gameState = "GAMEOVER";
             }
         }
 
         function update() {
-            if (isGameOver) return;
+            if (gameState !== "PLAYING") return;
 
             frameCount++;
             score = Math.floor(frameCount / 8);
-            gameSpeed = 5 + Math.floor(score / 250); // Aumenta dificultad progresivamente
+            gameSpeed = 5 + Math.floor(score / 300);
 
             if (player.invulnerable > 0) player.invulnerable--;
-            player.anim += 0.2;
+            if (player.wingsTime > 0) player.wingsTime--;
+            player.anim += 0.25;
 
-            // Gravedad
-            player.vy += player.gravity;
+            if (player.wingsTime > 0) {
+                player.vy += 0.2; // Gravedad reducida al volar con alas
+            } else {
+                player.vy += player.gravity;
+            }
+            
             player.y += player.vy;
 
-            if (player.y > 175) {
-                player.y = 175;
+            if (player.y > 170) {
+                player.y = 170;
                 player.vy = 0;
                 player.grounded = true;
             }
 
-            // Nubes en movimiento
             clouds.forEach(c => {
                 c.x -= c.speed * 0.5;
                 if (c.x < -60) c.x = canvas.width + 50;
             });
 
-            // Generación infinita y aleatoria de obstáculos (estilo cactus/bloques futuristas)
-            if (frameCount % Math.max(45, 110 - Math.floor(score / 20)) === 0) {
-                let type = Math.random();
-                if (type < 0.6) {
-                    // Obstáculo bajo normal
-                    obstacles.push({ x: canvas.width, y: 180, width: 22, height: 25, type: 'block' });
-                } else if (type < 0.85) {
-                    // Obstáculo alto
-                    obstacles.push({ x: canvas.width, y: 145, width: 24, height: 60, type: 'tall' });
+            // Generación de obstáculos variados (Cactus, Dinosaurios, Arañas, Aves)
+            if (frameCount % Math.max(50, 110 - Math.floor(score / 25)) === 0) {
+                let rand = Math.random();
+                if (rand < 0.3) {
+                    obstacles.push({ x: canvas.width, y: 175, width: 20, height: 25, type: 'cactus' });
+                } else if (rand < 0.6) {
+                    obstacles.push({ x: canvas.width, y: 170, width: 30, height: 30, type: 'dino' });
+                } else if (rand < 0.8) {
+                    obstacles.push({ x: canvas.width, y: 180, width: 26, height: 20, type: 'spider' });
                 } else {
-                    // Obstáculo doble
-                    obstacles.push({ x: canvas.width, y: 180, width: 20, height: 25, type: 'block' });
-                    obstacles.push({ x: canvas.width + 35, y: 180, width: 20, height: 25, type: 'block' });
+                    obstacles.push({ x: canvas.width, y: Math.random() > 0.5 ? 90 : 130, width: 28, height: 20, type: 'bird' });
                 }
             }
 
-            // Generación aleatoria de corazones para recuperar vidas
-            if (frameCount % 300 === 0 && Math.random() > 0.3) {
-                hearts.push({ x: canvas.width, y: Math.random() > 0.5 ? 120 : 150, width: 20, height: 20 });
+            // Generación de ítems (Corazones y Alas)
+            if (frameCount % 250 === 0) {
+                items.push({ x: canvas.width, y: Math.random() > 0.5 ? 110 : 150, width: 22, height: 22, type: Math.random() > 0.4 ? 'heart' : 'wings' });
             }
 
             // Actualizar obstáculos
             for (let i = obstacles.length - 1; i >= 0; i--) {
                 obstacles[i].x -= gameSpeed;
+                if (obstacles[i].type === 'bird') obstacles[i].x -= 1.5; // Las aves vuelan más rápido
 
-                // Colisión con jugador
                 if (
                     player.x < obstacles[i].x + obstacles[i].width - 4 &&
                     player.x + player.width - 4 > obstacles[i].x &&
@@ -218,22 +222,25 @@
                 }
             }
 
-            // Actualizar corazones
-            for (let i = hearts.length - 1; i >= 0; i--) {
-                hearts[i].x -= gameSpeed;
+            // Actualizar ítems
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].x -= gameSpeed;
 
-                // Colisión con jugador para sumar vida
                 if (
-                    player.x < hearts[i].x + hearts[i].width &&
-                    player.x + player.width > hearts[i].x &&
-                    player.y < hearts[i].y + hearts[i].height &&
-                    player.y + player.height > hearts[i].y
+                    player.x < items[i].x + items[i].width &&
+                    player.x + player.width > items[i].x &&
+                    player.y < items[i].y + items[i].height &&
+                    player.y + player.height > items[i].y
                 ) {
-                    if (lives < 5) lives++;
-                    playSound('heart');
-                    hearts.splice(i, 1);
-                } else if (hearts[i].x + hearts[i].width < 0) {
-                    hearts.splice(i, 1);
+                    if (items[i].type === 'heart') {
+                        if (lives < 5) lives++;
+                    } else if (items[i].type === 'wings') {
+                        player.wingsTime = 300; // ~5 segundos de vuelo
+                    }
+                    playSound('powerup');
+                    items.splice(i, 1);
+                } else if (items[i].x + items[i].width < 0) {
+                    items.splice(i, 1);
                 }
             }
         }
@@ -251,72 +258,125 @@
                 ctx.fill();
             });
 
-            // Letrero dinámico en el fondo que pasa cada cierto tiempo: "BALDUS CORP"
-            let marcaX = (1500 - (frameCount * 1.5) % 1800);
+            // Letrero dinámico en el cielo: BALDUS CORP
+            let marcaX = (1600 - (frameCount * 1.5) % 1900);
             ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
-            ctx.font = "bold 42px 'Segoe UI', sans-serif";
-            ctx.fillText("BALDUS CORP", marcaX, 90);
+            ctx.font = "bold 44px 'Segoe UI', sans-serif";
+            ctx.fillText("BALDUS CORP", marcaX, 85);
 
-            // Suelo pixelado con líneas retro
+            // Suelo del juego
             ctx.fillStyle = "#1e293b";
-            ctx.fillRect(0, 205, canvas.width, 45);
+            ctx.fillRect(0, 200, canvas.width, 50);
             ctx.fillStyle = "#3b82f6";
-            ctx.fillRect(0, 205, canvas.width, 3);
+            ctx.fillRect(0, 200, canvas.width, 3);
 
-            // Dibujar Obstáculos (Diseño detallado tipo bloque cibernético / cactus pixel)
+            // Dibujar Obstáculos
             for (let obs of obstacles) {
-                ctx.fillStyle = "#ef4444";
-                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-                ctx.fillStyle = "#b91c1c";
-                ctx.fillRect(obs.x + 2, obs.y + 2, obs.width - 4, 4);
+                if (obs.type === 'cactus') {
+                    ctx.fillStyle = "#16a34a";
+                    ctx.fillRect(obs.x + 4, obs.y, 12, 25);
+                    ctx.fillRect(obs.x, obs.y + 8, 20, 5);
+                } else if (obs.type === 'dino') {
+                    ctx.fillStyle = "#9333ea";
+                    ctx.fillRect(obs.x + 5, obs.y + 6, 20, 18);
+                    ctx.fillRect(obs.x, obs.y + 12, 8, 12); // Cabeza
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(obs.x + 2, obs.y + 14, 3, 3);
+                } else if (obs.type === 'spider') {
+                    ctx.fillStyle = "#0f172a";
+                    ctx.fillRect(obs.x + 4, obs.y + 6, 18, 12);
+                    ctx.strokeStyle = "#0f172a";
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(obs.x + 6, obs.y + 18); ctx.lineTo(obs.x, obs.y + 24);
+                    ctx.moveTo(obs.x + 20, obs.y + 18); ctx.lineTo(obs.x + 26, obs.y + 24);
+                    ctx.stroke();
+                } else if (obs.type === 'bird') {
+                    ctx.fillStyle = "#ef4444";
+                    let wingOffset = Math.sin(frameCount * 0.4) * 6;
+                    ctx.fillRect(obs.x + 4, obs.y + 8, 20, 10);
+                    ctx.fillRect(obs.x + 8, obs.y + wingOffset, 12, 6);
+                }
             }
 
-            // Dibujar Corazones (Vidas extra)
-            for (let h of hearts) {
-                ctx.fillStyle = "#ec4899";
-                ctx.beginPath();
-                let hx = h.x + 10, hy = h.y + 10;
-                ctx.arc(hx - 5, hy, 6, Math.PI, 0, false);
-                ctx.arc(hx + 5, hy, 6, Math.PI, 0, false);
-                ctx.lineTo(hx, hy + 12);
-                ctx.fill();
+            // Dibujar Ítems (Corazones y Alas)
+            for (let item of items) {
+                if (item.type === 'heart') {
+                    ctx.fillStyle = "#ec4899";
+                    ctx.beginPath();
+                    let hx = item.x + 11, hy = item.y + 11;
+                    ctx.arc(hx - 5, hy, 6, Math.PI, 0, false);
+                    ctx.arc(hx + 5, hy, 6, Math.PI, 0, false);
+                    ctx.lineTo(hx, hy + 12);
+                    ctx.fill();
+                } else if (item.type === 'wings') {
+                    ctx.fillStyle = "#38bdf8";
+                    ctx.fillRect(item.x + 2, item.y + 6, 18, 10);
+                    ctx.fillStyle = "#bae6fd";
+                    ctx.fillRect(item.x + 6, item.y + 2, 10, 6);
+                }
             }
 
-            // Dibujar Jugador (Sprite animado pixel art)
-            if (player.invulnerable % 4 < 2) {
-                let px = player.x;
-                let py = player.y;
+            // Dibujar Personaje Estilo Minecraft de Lado (Corriendo)
+            if (gameState === "PLAYING" || gameState === "GAMEOVER") {
+                if (player.invulnerable % 4 < 2) {
+                    let px = player.x;
+                    let py = player.y;
 
-                // Cuerpo / Traje
-                ctx.fillStyle = "#2563eb";
-                ctx.fillRect(px + 4, py + 10, 18, 14);
+                    // Si tiene alas activas, dibujarlas en la espalda
+                    if (player.wingsTime > 0) {
+                        ctx.fillStyle = "#38bdf8";
+                        ctx.fillRect(px - 6, py + 10, 8, 14);
+                    }
 
-                // Cabeza y Gorra Baldus
+                    // Cabeza estilo pixel de Minecraft (de perfil)
+                    ctx.fillStyle = "#f87171"; // Piel / Cara
+                    ctx.fillRect(px + 4, py, 16, 14);
+                    ctx.fillStyle = "#1e1b4b"; // Pelo / Gorra
+                    ctx.fillRect(px + 4, py, 16, 5);
+                    ctx.fillStyle = "#000000"; // Ojo
+                    ctx.fillRect(px + 14, py + 5, 3, 3);
+
+                    // Torso / Camisa
+                    ctx.fillStyle = "#2563eb"; 
+                    ctx.fillRect(px + 6, py + 14, 12, 10);
+
+                    // Piernas animadas simulando carrera lateral
+                    let legOffset = player.grounded ? Math.sin(player.anim) * 5 : 0;
+                    ctx.fillStyle = "#1e293b";
+                    ctx.fillRect(px + 6, py + 24, 4, 8 + legOffset);
+                    ctx.fillRect(px + 14, py + 24, 4, 8 - legOffset);
+                }
+            }
+
+            // Pantalla de Inicio (MENU)
+            if (gameState === "MENU") {
+                ctx.fillStyle = "rgba(11, 15, 25, 0.88)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "#38bdf8";
-                ctx.fillRect(px + 3, py + 2, 18, 9);
-                ctx.fillStyle = "#1d4ed8";
-                ctx.fillRect(px + (player.vy !== 0 ? 2 : 5), py, 14, 4);
-
-                // Piernas con animación de carrera
-                let legOffset = player.grounded ? Math.sin(player.anim) * 5 : 0;
-                ctx.fillStyle = "#1e293b";
-                ctx.fillRect(px + 5, py + 24, 6, 6 + legOffset);
-                ctx.fillRect(px + 15, py + 24, 6, 6 - legOffset);
+                ctx.font = "bold 26px 'Segoe UI', sans-serif";
+                ctx.fillText("BALDUS CORP RUNNER", 145, 100);
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 16px 'Segoe UI', sans-serif";
+                ctx.fillText("¡Presiona ESPACIO o haz Click para INICIAR JUEGO!", 100, 150);
             }
 
-            // Actualizar HUD
-            document.getElementById("score").innerText = score;
-            let heartsStr = "";
-            for (let i = 0; i < lives; i++) heartsStr += "❤️";
-            document.getElementById("lives").innerHTML = heartsStr;
-
-            if (isGameOver) {
+            // Pantalla de Game Over
+            if (gameState === "GAMEOVER") {
                 ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "#ffffff";
-                ctx.font = "bold 18px Segoe UI";
-                ctx.fillText("¡GAME OVER! Presiona ESPACIO para reintentar", 80, 120);
+                ctx.font = "bold 20px Segoe UI";
+                ctx.fillText("¡GAME OVER!", 230, 110);
+                ctx.font = "14px Segoe UI";
+                ctx.fillText("Presiona ESPACIO para JUGAR DE NUEVO", 165, 145);
             }
+
+            document.getElementById("score").innerText = score;
+            let heartsStr = "";
+            for (let i = 0; i < lives; i++) heartsStr += "❤️";
+            if (player.wingsTime > 0) heartsStr += " 🪽(Vuelo)";
+            document.getElementById("lives").innerHTML = heartsStr;
         }
 
         function loop() {
