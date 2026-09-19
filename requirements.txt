@@ -1,6 +1,5 @@
 streamlit
-easyocr
-rapidfuzz
+beautifulsoup4
 pandas
+rapidfuzz
 openpyxl
-pypdf
