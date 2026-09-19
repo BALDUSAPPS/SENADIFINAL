@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Minijuego Arcade</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #0f172a;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 400px;
+            overflow: hidden;
+        }
+        canvas {
+            background: #1e293b;
+            border: 2px solid #3b82f6;
+            box-shadow: 0px 0px 15px rgba(59, 130, 246, 0.5);
+        }
+        .info {
+            margin-bottom: 8px;
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">Usa la <b>Barra Espaciadora</b> o <b>Click</b> para saltar los obstáculos. Puntuación: <span id="score">0</span></div>
+    <canvas id="gameCanvas" width="600" height="250"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let dino = { x: 50, y: 180, width: 25, height: 25, vy: 0, gravity: 0.6, jump: -10, grounded: false };
+        let obstacles = [];
+        let score = 0;
+        let gameSpeed = 4;
+        let frameCount = 0;
+        let isGameOver = false;
+
+        document.addEventListener("keydown", function(e) {
+            if (e.code === "Space" || e.code === "ArrowUp") {
+                if (dino.grounded) {
+                    dino.vy = dino.jump;
+                    dino.grounded = false;
+                }
+                if (isGameOver) resetGame();
+            }
+        });
+
+        canvas.addEventListener("click", function() {
+            if (dino.grounded) {
+                dino.vy = dino.jump;
+                dino.grounded = false;
+            }
+            if (isGameOver) resetGame();
+        });
+
+        function resetGame() {
+            obstacles = [];
+            score = 0;
+            gameSpeed = 4;
+            isGameOver = false;
+            dino.y = 180;
+        }
+
+        function update() {
+            if (isGameOver) return;
+
+            frameCount++;
+            score = Math.floor(frameCount / 10);
+            document.getElementById("score").innerText = score;
+
+            // Gravedad
+            dino.vy += dino.gravity;
+            dino.y += dino.vy;
+
+            if (dino.y > 180) {
+                dino.y = 180;
+                dino.vy = 0;
+                dino.grounded = true;
+            }
+
+            // Obstáculos
+            if (frameCount % 100 === 0) {
+                obstacles.push({ x: canvas.width, y: 185, width: 20, height: 20 });
+            }
+
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].x -= gameSpeed;
+
+                // Colisiones
+                if (
+                    dino.x < obstacles[i].x + obstacles[i].width &&
+                    dino.x + dino.width > obstacles[i].x &&
+                    dino.y < obstacles[i].y + obstacles[i].height &&
+                    dino.y + dino.height > obstacles[i].y
+                ) {
+                    isGameOver = true;
+                }
+
+                if (obstacles[i].x + obstacles[i].width < 0) {
+                    obstacles.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Suelo
+            ctx.fillStyle = "#334155";
+            ctx.fillRect(0, 205, canvas.width, 45);
+
+            // Jugador (Cubo de Baldus Corp)
+            ctx.fillStyle = "#3b82f6";
+            ctx.fillRect(dino.x, dino.y, dino.width, dino.height);
+
+            // Obstáculos
+            ctx.fillStyle = "#ef4444";
+            for (let obs of obstacles) {
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            }
+
+            if (isGameOver) {
+                ctx.fillStyle = "white";
+                ctx.font = "20px Arial";
+                ctx.fillText("¡JUEGO TERMINADO! Haz click para reiniciar", 80, 120);
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>

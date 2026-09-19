@@ -1,0 +1,139 @@
+import streamlit as st
+import urllib.request
+import pandas as pd
+from bs4 import BeautifulSoup
+from rapidfuzz import fuzz
+import time
+import os
+
+# Configuración de la página
+st.set_page_config(
+    page_title="Cotejo de Gacetas SENADI",
+    page_icon="⚖️",
+    layout="wide"
+)
+
+# Estilo visual moderno y limpio
+st.markdown("""
+    <style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1E3A8A;
+        font-weight: 700;
+        margin-bottom: 0px;
+    }
+    .sub-header {
+        font-size: 1.1rem;
+        color: #4B5563;
+        margin-bottom: 25px;
+    }
+    .creator-tag {
+        font-size: 0.9rem;
+        color: #2563EB;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Sidebar corporativa
+with st.sidebar:
+    st.image("https://img.icons8.com/color/96/law.png", width=80)
+    st.markdown("### **Panel de Control**")
+    st.markdown("Herramienta automatizada de vigilancia y cotejo fonético para propiedad intelectual.")
+    st.markdown("---")
+    st.markdown("<p class='creator-tag'>Creado por BALDUS CORP</p>", unsafe_allow_html=True)
+    st.markdown("© 2026 Todos los derechos reservados.")
+
+# Interfaz Principal
+st.markdown("<p class='main-header'>Vigilancia Inteligente de Gacetas SENADI</p>", unsafe_allow_html=True)
+st.markdown("<p class='sub-header'>Sube tu portafolio de marcas y procesa la Gaceta en tiempo real.</p>", unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader("Sube tu archivo Excel de marcas (.xlsx)", type=["xlsx"])
+
+if uploaded_file is not None:
+    df_excel = pd.read_excel(uploaded_file)
+    
+    # Detectar columna de marcas automáticamente
+    columna_candidata = [c for c in df_excel.columns if 'denominacion' in c.lower() or 'marca' in c.lower()]
+    if columna_candidata:
+        columna_marcas = columna_candidata[0]
+        st.success(f"Archivo cargado correctamente. Se detectó la columna: **{columna_marcas}**")
+        
+        gaceta_num = st.text_input("Número de Gaceta a analizar:", value="763")
+        
+        if st.button("Iniciar Cotejo de Marcas", type="primary"):
+            df_excel['Marca_clean'] = df_excel[columna_marcas].astype(str).str.upper().str.strip()
+            total_paginas = 1058
+            hallazgos = []
+            
+            # Contenedores visuales para el progreso y el juego
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+            
+            # Pestañas para separar el proceso del entretenimiento
+            tab_progreso, tab_juego = st.tabs(["📊 Estado del Proceso", "🎮 Zona Arcade (Minijuego)"])
+            
+            with tab_juego:
+                st.markdown("### Disfruta mientras el sistema procesa el análisis masivo:")
+                # Incrustamos el minijuego de HTML externo
+                if os.path.exists("game.html"):
+                    with open("game.html", "r", encoding="utf-8") as f:
+                        html_game = f.read()
+                    st.components.v1.html(html_game, height=450, scrolling=False)
+                else:
+                    st.info("Coloca el archivo game.html en el repositorio para activar el minijuego.")
+
+            with tab_progreso:
+                for p in range(1, total_paginas + 1):
+                    porcentaje = int((p / total_paginas) * 100)
+                    progress_bar.progress(porcentaje)
+                    status_text.text(f"Analizando página {p} de {total_paginas} ({porcentaje}%)")
+                    
+                    url = f"http://gaceta.propiedadintelectual.gob.ec:8180/Gacetas/{gaceta_num}/files/basic-html/page{p}.html"
+                    try:
+                        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                        with urllib.request.urlopen(req, timeout=2) as resp:
+                            soup = BeautifulSoup(resp.read(), 'html.parser')
+                            texto = soup.get_text().upper()
+                            
+                            for _, row in df_excel.iterrows():
+                                marca = row['Marca_clean']
+                                if len(marca) < 3:
+                                    continue
+                                if marca in texto:
+                                    hallazgos.append({
+                                        "Página": p,
+                                        "Tu Marca": row[columna_marcas],
+                                        "Extracto": texto[:160].replace('\n', ' ')
+                                    })
+                    except:
+                        continue
+
+                progress_bar.progress(100)
+                status_text.text("¡Proceso de cotejo finalizado con éxito!")
+
+                if hallazgos:
+                    df_res = pd.DataFrame(hallazgos).drop_duplicates()
+                    st.balloons()
+                    st.success(f"Se encontraron {len(df_res)} coincidencias de marcas.")
+                    
+                    # Mostrar tabla de resultados en pantalla
+                    st.dataframe(df_res, use_container_width=True)
+                    
+                    # Botón de descarga para el reporte en Excel
+                    archivo_salida = f"Reporte_Gaceta_{gaceta_num}.xlsx"
+                    df_res.to_excel(archivo_salida, index=False)
+                    
+                    with open(archivo_salida, "rb") as f:
+                        st.download_button(
+                            label="📥 Descargar Reporte en Excel",
+                            data=f,
+                            file_name=archivo_salida,
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                        )
+                else:
+                    st.warning("No se encontraron coincidencias directas con las marcas de tu portafolio en esta gaceta.")
+    else:
+        st.error("El Excel subido no contiene una columna identificable con los nombres de las marcas ('Denominacion' o 'Marca').")
