@@ -2,11 +2,11 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Baldus Bros Arcade</title>
+    <title>Baldus Bros - HD Arcade</title>
     <style>
         body {
             margin: 0;
-            background-color: #0b0f19;
+            background-color: #0f172a;
             color: #ffffff;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             display: flex;
@@ -27,7 +27,7 @@
             letter-spacing: 0.5px;
         }
         canvas {
-            background: linear-gradient(to bottom, #38bdf8 0%, #bae6fd 60%, #1e293b 60%);
+            background: linear-gradient(to bottom, #38bdf8 0%, #cbd5e1 65%, #1e293b 65%);
             border: 2px solid #2563eb;
             box-shadow: 0px 0px 20px rgba(37, 99, 235, 0.4);
             border-radius: 4px;
@@ -41,18 +41,18 @@
 </head>
 <body>
     <div class="hud">
-        <span>BALDUS BROS - MUNDO 1-1</span>
+        <span>BALDUS BROS - WORLD 1-1</span>
         <span>PUNTOS: <span id="score">0</span></span>
-        <span>VIDAS: ❤️❤️❤️</span>
+        <span>VIDAS: <span id="lives">❤️❤️❤️</span></span>
     </div>
     <canvas id="gameCanvas" width="600" height="250"></canvas>
-    <div class="controls-hint">Usa las flechas <b>← →</b> para moverte y <b>Espacio</b> / <b>↑</b> para saltar.</div>
+    <div class="controls-hint">Usa las flechas <b>← →</b> para correr y <b>Espacio</b> / <b>↑</b> para saltar.</div>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        // Sistema de Sonido retro (Web Audio API)
+        // Sistema de audio retro
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         function playSound(type) {
             if (audioCtx.state === 'suspended') { audioCtx.resume(); }
@@ -63,49 +63,70 @@
 
             if (type === 'jump') {
                 osc.type = 'square';
-                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(120, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(400, audioCtx.currentTime + 0.15);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.setValueAtTime(0.08, audioCtx.currentTime);
                 gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
                 osc.start();
                 osc.stop(audioCtx.currentTime + 0.15);
-            } else if (type === 'score') {
+            } else if (type === 'stomp') {
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.08);
+                osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime + 0.12);
                 gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.2);
-            } else if (type === 'gameover') {
+                osc.stop(audioCtx.currentTime + 0.12);
+            } else if (type === 'hurt') {
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(200, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(80, audioCtx.currentTime + 0.4);
-                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(50, audioCtx.currentTime + 0.3);
+                gainNode.gain.setValueAtTime(0.12, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
+                osc.stop(audioCtx.currentTime + 0.3);
             }
         }
 
-        // Estado del jugador (Protagonista tipo Mario)
-        let player = {
-            x: 50, y: 170, width: 22, height: 28,
-            vx: 0, vy: 0, speed: 3.5, jumpForce: -9, gravity: 0.5, grounded: false, facing: 'right'
-        };
-
-        // Entorno y obstáculos (Goombas / Tuberías simuladas)
-        let obstacles = [];
-        let platforms = [
-            { x: 0, y: 198, width: 600, height: 52 }, // Suelo principal
-            { x: 220, y: 130, width: 90, height: 16 }, // Plataforma flotante 1
-            { x: 380, y: 95, width: 80, height: 16 }   // Plataforma flotante 2
-        ];
-        
+        let cameraX = 0;
         let score = 0;
+        let lives = 3;
         let frameCount = 0;
         let isGameOver = false;
         let keys = {};
+
+        let player = {
+            x: 50, y: 155, width: 24, height: 30,
+            vx: 0, vy: 0, speed: 3.5, jumpForce: -10, gravity: 0.5, grounded: false, facing: 'right', invulnerable: 0, animFrame: 0
+        };
+
+        let platforms = [
+            { x: 0, y: 195, width: 3000, height: 55 },
+            { x: 320, y: 130, width: 100, height: 16 },
+            { x: 500, y: 95, width: 130, height: 16 },
+            { x: 750, y: 130, width: 110, height: 16 },
+            { x: 1000, y: 115, width: 120, height: 16 },
+            { x: 1250, y: 130, width: 160, height: 16 }
+        ];
+
+        let scenery = [
+            { type: 'cloud', x: 120, y: 35, w: 70, h: 25 },
+            { type: 'cloud', x: 420, y: 20, w: 90, h: 30 },
+            { type: 'cloud', x: 850, y: 40, w: 80, h: 25 },
+            { type: 'cloud', x: 1250, y: 25, w: 95, h: 30 },
+            { type: 'hill', x: 80, y: 145, w: 100, h: 50 },
+            { type: 'hill', x: 600, y: 125, w: 130, h: 70 },
+            { type: 'bush', x: 260, y: 179, w: 50, h: 16 },
+            { type: 'bush', x: 700, y: 179, w: 60, h: 16 }
+        ];
+
+        let enemies = [
+            { type: 'goomba', x: 380, y: 175, width: 22, height: 20, vx: -1.4, alive: true, anim: 0 },
+            { type: 'koopa', x: 650, y: 171, width: 22, height: 24, vx: -1.1, alive: true, anim: 0 },
+            { type: 'flyer', x: 850, y: 80, width: 24, height: 20, vx: -2, baseY: 80, alive: true },
+            { type: 'goomba', x: 1100, y: 175, width: 22, height: 20, vx: -1.4, alive: true, anim: 0 },
+            { type: 'flyer', x: 1400, y: 65, width: 24, height: 20, vx: -2.3, baseY: 65, alive: true }
+        ];
 
         window.addEventListener("keydown", (e) => {
             keys[e.code] = true;
@@ -125,50 +146,64 @@
 
         function resetGame() {
             player.x = 50;
-            player.y = 170;
+            player.y = 155;
             player.vx = 0;
             player.vy = 0;
-            obstacles = [];
+            cameraX = 0;
             score = 0;
-            frameCount = 0;
+            lives = 3;
             isGameOver = false;
+            enemies.forEach(e => e.alive = true);
+        }
+
+        function loseLife() {
+            if (player.invulnerable > 0) return;
+            lives--;
+            playSound('hurt');
+            player.invulnerable = 90;
+            if (lives <= 0) {
+                isGameOver = true;
+            } else {
+                player.y = 100;
+                player.vy = 0;
+            }
         }
 
         function update() {
             if (isGameOver) return;
 
+            if (player.invulnerable > 0) player.invulnerable--;
             frameCount++;
-            if (frameCount % 15 === 0) {
-                score += 5; // Aumento de puntos por tiempo sobrevivido
-            }
 
-            // Movimiento horizontal estilo Mario
             if (keys["ArrowLeft"] || keys["KeyA"]) {
                 player.vx = -player.speed;
                 player.facing = 'left';
+                player.animFrame += 0.2;
             } else if (keys["ArrowRight"] || keys["KeyD"]) {
                 player.vx = player.speed;
                 player.facing = 'right';
+                player.animFrame += 0.2;
             } else {
                 player.vx = 0;
+                player.animFrame = 0;
             }
 
             player.x += player.vx;
             if (player.x < 0) player.x = 0;
-            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
 
-            // Gravedad y saltos
+            cameraX = player.x - 180;
+            if (cameraX < 0) cameraX = 0;
+
             player.vy += player.gravity;
             player.y += player.vy;
             player.grounded = false;
 
-            // Colisiones con plataformas y suelo
             for (let p of platforms) {
                 if (
                     player.x < p.x + p.width &&
                     player.x + player.width > p.x &&
                     player.y + player.height >= p.y &&
-                    player.y + player.height - player.vy <= p.y + 6 &&
+                    player.y + player.height - player.vy <= p.y + 8 &&
                     player.vy >= 0
                 ) {
                     player.y = p.y - player.height;
@@ -177,110 +212,170 @@
                 }
             }
 
-            // Generación de enemigos / obstáculos móviles (Estilo Goomba)
-            if (frameCount % 120 === 0) {
-                obstacles.push({
-                    x: canvas.width,
-                    y: 178,
-                    width: 20,
-                    height: 20,
-                    vx: -2.5
-                });
-            }
+            for (let en of enemies) {
+                if (!en.alive) continue;
 
-            for (let i = obstacles.length - 1; i >= 0; i--) {
-                let obs = obstacles[i];
-                obs.x += obs.vx;
+                if (en.type === 'flyer') {
+                    en.x += en.vx;
+                    en.y = en.baseY + Math.sin(frameCount * 0.1) * 35;
+                    if (en.x < cameraX - 60) en.x = cameraX + 650;
+                } else {
+                    en.x += en.vx;
+                    en.anim += 0.15;
+                    if (en.x < 100 || en.x > 2500) en.vx *= -1;
+                }
 
-                // Colisión con el jugador
                 if (
-                    player.x < obs.x + obs.width &&
-                    player.x + player.width > obs.x &&
-                    player.y < obs.y + obs.height &&
-                    player.y + player.height > obs.y
+                    player.x < en.x + en.width &&
+                    player.x + player.width > en.x &&
+                    player.y < en.y + en.height &&
+                    player.y + player.height > en.y
                 ) {
-                    // Si cae encima del obstáculo, lo elimina (Salto ofensivo)
-                    if (player.vy > 0 && player.y + player.height - player.vy <= obs.y + 8) {
-                        obstacles.splice(i, 1);
-                        player.vy = -6;
-                        score += 100;
-                        playSound('score');
+                    if (player.vy > 0 && player.y + player.height - player.vy <= en.y + 12) {
+                        en.alive = false;
+                        player.vy = -8;
+                        score += 250;
+                        playSound('stomp');
                     } else {
-                        isGameOver = true;
-                        playSound('gameover');
+                        loseLife();
                     }
-                } else if (obs.x + obs.width < 0) {
-                    obstacles.splice(i, 1);
                 }
             }
         }
 
         function draw() {
-            // Fondo de cielo y colinas decorativas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Nubes de fondo
-            ctx.fillStyle = "rgba(255, 255, 255, 0.7)";
-            ctx.beginPath();
-            ctx.arc(120, 50, 18, 0, Math.PI * 2);
-            ctx.arc(140, 42, 22, 0, Math.PI * 2);
-            ctx.arc(450, 70, 25, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.save();
+            ctx.translate(-cameraX, 0);
 
-            // Dibujar plataformas y suelo
+            // Nubes detalladas
+            for (let sc of scenery) {
+                if (sc.type === 'cloud') {
+                    ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+                    ctx.beginPath();
+                    ctx.arc(sc.x, sc.y, sc.h/2, 0, Math.PI * 2);
+                    ctx.arc(sc.x + sc.w*0.35, sc.y - 5, sc.h*0.65, 0, Math.PI * 2);
+                    ctx.arc(sc.x + sc.w*0.75, sc.y, sc.h/2, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Colinas y arbustos definidos
+            for (let sc of scenery) {
+                if (sc.type === 'hill') {
+                    ctx.fillStyle = "#15803d";
+                    ctx.beginPath();
+                    ctx.arc(sc.x + sc.w/2, sc.y + sc.h, sc.w/2, Math.PI, 0, false);
+                    ctx.fill();
+                    // Anillo de brillo decorativo en la colina
+                    ctx.strokeStyle = "#16a34a";
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(sc.x + sc.w/2, sc.y + sc.h, sc.w/2 - 2, Math.PI * 0.8, Math.PI * 0.2, true);
+                    ctx.stroke();
+                } else if (sc.type === 'bush') {
+                    ctx.fillStyle = "#166534";
+                    ctx.beginPath();
+                    ctx.arc(sc.x + 12, sc.y + 10, 11, 0, Math.PI * 2);
+                    ctx.arc(sc.x + 28, sc.y + 4, 15, 0, Math.PI * 2);
+                    ctx.arc(sc.x + 42, sc.y + 10, 11, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            // Suelo y plataformas estilizadas
             for (let p of platforms) {
                 if (p.y > 150) {
-                    // Suelo con diseño de bloques de ladrillo
-                    ctx.fillStyle = "#b45309";
+                    ctx.fillStyle = "#b91c1c"; // Bloques de ladrillo
                     ctx.fillRect(p.x, p.y, p.width, p.height);
-                    ctx.fillStyle = "#15803d";
+                    ctx.fillStyle = "#15803d"; // Capa de césped superior viva
                     ctx.fillRect(p.x, p.y, p.width, 10);
+                    ctx.fillStyle = "#22c55e";
+                    ctx.fillRect(p.x, p.y, p.width, 4);
                 } else {
-                    // Plataformas flotantes clásicas
-                    ctx.fillStyle = "#f97316";
+                    ctx.fillStyle = "#ea580c"; // Bloques flotantes misteriosos
                     ctx.fillRect(p.x, p.y, p.width, p.height);
-                    ctx.strokeStyle = "#c2410c";
+                    ctx.strokeStyle = "#7c2d12";
+                    ctx.lineWidth = 2;
                     ctx.strokeRect(p.x, p.y, p.width, p.height);
                 }
             }
 
-            // Dibujar Enemigos (Estilo Goomba rojizo)
-            for (let obs of obstacles) {
-                ctx.fillStyle = "#dc2626";
-                ctx.fillRect(obs.x, obs.y + 4, obs.width, obs.height - 4);
-                // Ojos del enemigo
-                ctx.fillStyle = "#ffffff";
-                ctx.fillRect(obs.x + 3, obs.y + 7, 4, 4);
-                ctx.fillRect(obs.x + 13, obs.y + 7, 4, 4);
+            // Enemigos animados con expresiones y movimiento
+            for (let en of enemies) {
+                if (!en.alive) continue;
+
+                if (en.type === 'goomba') {
+                    ctx.fillStyle = "#9a3412";
+                    ctx.fillRect(en.x, en.y + 6, en.width, en.height - 6);
+                    // Ojos enojados
+                    ctx.fillStyle = "#fef08a";
+                    ctx.fillRect(en.x + 2, en.y + 7, 6, 6);
+                    ctx.fillRect(en.x + 14, en.y + 7, 6, 6);
+                    ctx.fillStyle = "#000000";
+                    ctx.fillRect(en.x + 5, en.y + 9, 2, 3);
+                    ctx.fillRect(en.x + 17, en.y + 9, 2, 3);
+                    // Patas animadas
+                    let legStep = Math.sin(en.anim) > 0 ? 3 : 0;
+                    ctx.fillStyle = "#451a03";
+                    ctx.fillRect(en.x + 2, en.y + 18, 5, 4 + legStep);
+                    ctx.fillRect(en.x + 15, en.y + 18, 5, 4 - legStep);
+                } else if (en.type === 'koopa') {
+                    ctx.fillStyle = "#15803d";
+                    ctx.fillRect(en.x + 2, en.y + 8, 18, 16);
+                    ctx.fillStyle = "#16a34a";
+                    ctx.fillRect(en.x, en.y + 10, 22, 12);
+                    ctx.fillStyle = "#fde047"; // Cabeza asomada
+                    ctx.fillRect(en.x + (en.vx > 0 ? 16 : -4), en.y + 10, 8, 8);
+                } else if (en.type === 'flyer') {
+                    ctx.fillStyle = "#dc2626";
+                    ctx.fillRect(en.x, en.y + 4, en.width, en.height - 4);
+                    // Alas batiéndose rápido
+                    ctx.fillStyle = "#ffffff";
+                    let wingFlap = Math.sin(frameCount * 0.6) * 8;
+                    ctx.fillRect(en.x - 10, en.y + wingFlap, 10, 6);
+                    ctx.fillRect(en.x + 24, en.y + wingFlap, 10, 6);
+                }
             }
 
-            // Dibujar Personaje (Estilo Sprite Pixelado de Baldus Bros)
-            let px = player.x;
-            let py = player.y;
-            
-            // Gorra y camisa roja
-            ctx.fillStyle = "#ef4444";
-            ctx.fillRect(px + (player.facing === 'right' ? 4 : 2), py, 14, 10); // Gorra
-            ctx.fillRect(px + 2, py + 10, 18, 10); // Cuerpo
+            // Sprite del Jugador (Baldus Bros con animación fluida de piernas y gorra)
+            if (player.invulnerable % 4 < 2) {
+                let px = player.x;
+                let py = player.y;
 
-            // Overol azul
-            ctx.fillStyle = "#1d4ed8";
-            ctx.fillRect(px + 4, py + 16, 14, 12);
+                // Gorra y camisa roja detallada
+                ctx.fillStyle = "#b91c1c";
+                ctx.fillRect(px + (player.facing === 'right' ? 4 : 2), py, 16, 9);
+                ctx.fillRect(px + 2, py + 9, 20, 10);
 
-            // Zapatos
-            ctx.fillStyle = "#78350f";
-            ctx.fillRect(px, py + 24, 8, 4);
-            ctx.fillRect(px + 14, py + 24, 8, 4);
+                // Overol azul corporativo
+                ctx.fillStyle = "#1d4ed8";
+                ctx.fillRect(px + 4, py + 15, 16, 11);
+                ctx.fillStyle = "#facc15"; // Botones dorados del overol
+                ctx.fillRect(px + 5, py + 16, 2, 2);
+                ctx.fillRect(px + 17, py + 16, 2, 2);
 
-            // Actualizar HUD de Puntos en pantalla
+                // Piernas con animación al caminar
+                let legCycle = Math.sin(player.animFrame) * 3;
+                ctx.fillStyle = "#78350f";
+                ctx.fillRect(px + 2, py + 26, 7, 4 + legCycle);
+                ctx.fillRect(px + 15, py + 26, 7, 4 - legCycle);
+            }
+
+            ctx.restore();
+
+            // Actualizar interfaz HUD
             document.getElementById("score").innerText = score;
+            let hearts = "";
+            for (let h = 0; h < lives; h++) hearts += "❤️";
+            document.getElementById("lives").innerHTML = hearts;
 
             if (isGameOver) {
-                ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+                ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = "#ffffff";
                 ctx.font = "bold 18px Segoe UI";
-                ctx.fillText("¡GAME OVER! Presiona ESPACIO para reiniciar", 85, 120);
+                ctx.fillText("¡GAME OVER! Presiona ESPACIO para reintentar", 80, 120);
             }
         }
 
