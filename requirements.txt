@@ -1,4 +1,5 @@
 streamlit
+PyMuPDF
 beautifulsoup4
 pandas
 rapidfuzz
